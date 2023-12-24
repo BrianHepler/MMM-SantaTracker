@@ -24,6 +24,7 @@ Module.register("MMM-SantaTracker", {
         this.markersLayer = new L.layerGroup();
         this.popupIndex = -1;
         this.locationMap = new Map();
+        this.markerMap = new Map();
         this.popupMap = new Map();
         this.arrivalSet = [];
 
@@ -87,7 +88,7 @@ Module.register("MMM-SantaTracker", {
     updateSanta: function() {
         Log.info("Checking on Santa's location...");
 
-        var overTime = new Date("24 December 2023 18:14:33");  // override date for testing
+        var overTime = new Date("24 December 2023 22:02:01");  // override date for testing
         // Log.info ("Override date: " + overTime.valueOf());
         var now = new Date();
         var markers = this.markersLayer;
@@ -96,17 +97,24 @@ Module.register("MMM-SantaTracker", {
 
         for (let index = 0; index < this.arrivalSet.length; index++) {
             if (overTime.valueOf() > this.arrivalSet[index]) {
-                pullIndex = index;
+                pullIndex = this.arrivalSet[index];
             } else { break; }
         } // end loop
 
-        var entry = this.locationMap.get(this.arrivalSet[pullIndex]);
+        var entry = this.locationMap.get(pullIndex);
+        var marker = this.markerMap.get(pullIndex);
+        if (entry == null || marker == null) {
+            Log.info("Could not locate entry for " + pullIndex);
+            return;
+        }
         Log.info("Pulled entry for " + entry.city + ", " + entry.region);
+        Log.info("Pulled popup: " + this.popupMap.get(pullIndex));
+        Log.info("pulled marker: " + this.markerMap.get(pullIndex));
+        if (marker != null) {
+            marker.openPopup();
+        }
         var lat = entry.location.lat;
         var lon = entry.location.lng;
-        var popup = this.popupMap[pullIndex];
-
-
     },
 
     /**
@@ -123,10 +131,12 @@ Module.register("MMM-SantaTracker", {
             var entry = locations[index];
             var arrive = this.convertDateToThisYear(entry.arrival);
             this.arrivalSet.push(arrive);
-            this.locationMap.set(arrive,entry);
-            Log.info("Added lat " + entry.location.lat + ", lon " + entry.location.lng);
-            L.circleMarker([entry.location.lat, entry.location.lng], {radius: markerRadius, color: this.config.markerColor}).addTo(this.santaMap);
-            
+            var popup = this.createPopup(entry);
+            var marker = L.circleMarker([entry.location.lat, entry.location.lng], {radius: markerRadius, color: this.config.markerColor}).addTo(this.santaMap)
+            marker.bindPopup(popup);
+            this.locationMap.set(arrive,entry);          
+            this.popupMap.set(arrive, popup);
+            this.markerMap.set(arrive, marker);
         }
         this.arrivalSet.sort();
         // Log.info(this.arrivalSet);
@@ -166,20 +176,18 @@ Module.register("MMM-SantaTracker", {
         wrapper.className = "popup";
         wrapper.id = "SantaTracker-popup-" + entry.city;
 
-        var table = document.createElement("table");
-        table.setAttribute("heigh", "200px");
-        
+        var table = document.createElement("table");       
         const rowI = document.createElement("tr");
         const rowL = document.createElement("tr");
 
         var tdL = document.createElement("td");
+        tdL.className = "popup-label";
         tdL.append(entry.city + ", " + entry.region);
         rowL.appendChild(tdL);
         
         var tdI = document.createElement("td");
-        tdI.style.width = "200px";
-        tdI.style.height = "150px";
-        
+        tdI.className = "popup-imageCell"
+
         var imageUrl = null;
         var imageUrls = entry.details.photos;
         if (imageUrls.length > 0) { imageUrl = imageUrls[0].url; }
@@ -187,16 +195,14 @@ Module.register("MMM-SantaTracker", {
         if (imageUrl != null) {
             var image = document.createElement("img");
             image.className = "popup-image";
-            image.setAttribute("width", "200px");
             image.setAttribute("decoding", "sync");
             image.src = imageUrl;
             tdI.append(image);
+            // Log.info("Set URL to " + imageUrl);
         }
         rowI.appendChild(tdI);
-        
         table.appendChild(rowL);
         table.appendChild(rowI);
-        Log.info ("Table code: " + wrapper.innerHTML);
         wrapper.appendChild(table);
 
         return wrapper;

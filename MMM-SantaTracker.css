@@ -5,7 +5,7 @@
 }
 
 .popup {
-    height: 85px;
+    height: auto;
     width: auto;
     padding: 0px 0px 0px 0px;
     background-color:lightslategray;
@@ -15,12 +15,23 @@ table, tr, th, td {
     /* border: 1px solid; */
 }
 
-.popup-image {
-    border-radius: 2px;
-    padding: 3px;
+.popup-image img {
+    border-radius: 3px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 200px;
+    height: auto;
 }
 
-.name-label {
+.popup-imageCell td {
+    padding: 1px;
+}
+
+.popup-label {
+    height: auto;
+    width: auto;
+    max-width: 200px;
     font-size: 20px;
 }
 
