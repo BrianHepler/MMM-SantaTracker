@@ -125,7 +125,7 @@ Module.register("MMM-SantaTracker", {
         var pullIndex = 0;
 
         for (let index = 0; index < this.arrivalSet.length; index++) {
-            Log.info("checking " + now.valueOf() + " vs " + this.arrivalSet[index]);
+            // Log.info("checking " + now.valueOf() + " vs " + this.arrivalSet[index]);
             if (now.valueOf() > this.arrivalSet[index]) {
             // if (overTime.valueOf() > this.arrivalSet[index]) {   // Test conditional.
                 pullIndex = this.arrivalSet[index];
@@ -162,7 +162,7 @@ Module.register("MMM-SantaTracker", {
 
             for (let index = 0; index < this.arrivalSet.length; index++) {
                 var entry = this.locationMap.get(this.arrivalSet[index]);
-                Log.info("Adding previous points of " +entry.location.lat + ", " + entry.location.lng);
+                // Log.info("Adding previous points of " +entry.location.lat + ", " + entry.location.lng);
                 if (entry.location.lat == newLat && entry.location.lng == newLon) { break; } // done catching up
                 var newPoints = [entry.location.lat, entry.location.lng];
                 initPoints.push(newPoints);
@@ -327,9 +327,6 @@ Module.register("MMM-SantaTracker", {
                     this.processSantaData();
                 }, 2000);
                 this.loaded = true;
-                break;
-            case "CLOCK_MINUTE":
-                this.updateSanta();
                 break;
         }
     },
