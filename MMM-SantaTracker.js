@@ -146,6 +146,7 @@ Module.register("MMM-SantaTracker", {
         this.processSantaPath(entry.location.lat, entry.location.lng);
         if (marker != null) {
             marker.openPopup();
+            this.santaMap.setView([entry.location.lat, entry.location.lng]);
         }
     },
 
