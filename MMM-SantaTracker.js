@@ -103,8 +103,8 @@ Module.register("MMM-SantaTracker", {
         var pullIndex = 0;
 
         for (let index = 0; index < this.arrivalSet.length; index++) {
-            // Log.info("checking " + now.valueOf() + " vs " + this.arrivalSet[index]);
-            if (now.valueOf > this.arrivalSet[index]) {
+            Log.info("checking " + now.valueOf() + " vs " + this.arrivalSet[index]);
+            if (now.valueOf() > this.arrivalSet[index]) {
             // if (overTime.valueOf() > this.arrivalSet[index]) {   // Test conditional.
                 pullIndex = this.arrivalSet[index];
             } else { 
