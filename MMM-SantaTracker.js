@@ -91,6 +91,7 @@ Module.register("MMM-SantaTracker", {
         // Log.info ("Override date: " + overTime.valueOf());
         var now = new Date();
         var markers = this.markersLayer;
+        var markerArray = markers.getLayers();
         var pullIndex = 0;
 
         for (let index = 0; index < this.arrivalSet.length; index++) {
@@ -104,7 +105,8 @@ Module.register("MMM-SantaTracker", {
         var lat = entry.location.lat;
         var lon = entry.location.lng;
         var popup = this.popupMap[pullIndex];
-        var circle = this.createMarker(lat,lon).bindPopup(popup).openPopup();
+
+
     },
 
     /**
@@ -114,21 +116,17 @@ Module.register("MMM-SantaTracker", {
         Log.info(this.name + " - Processing Santa locations");
 
         var locations = this.santaData.destinations;
-        var now = new Date();
+        var markerRadius = this.santaMap.getZoom() - 1;
+        var markerLayer = this.markerLayer;
 
         for (let index = 0; index < locations.length; index++) {
             var entry = locations[index];
             var arrive = this.convertDateToThisYear(entry.arrival);
             this.arrivalSet.push(arrive);
             this.locationMap.set(arrive,entry);
-            this.popupMap.set(arrive, this.createPopup(entry));
-
-            L.marker([entry.location.lat, entry.location.lng]).addTo(this.santaMap);
-            // check for past dates. In case of reload.
-            // if (now.getUTCDate > arrive ) {
-            //     var circle = this.createMarker(entry.location.lat, entry.location.lng, null);
-            //     this.markersLayer.addLayer(circle);
-            // }
+            Log.info("Added lat " + entry.location.lat + ", lon " + entry.location.lng);
+            L.circleMarker([entry.location.lat, entry.location.lng], {radius: markerRadius, color: this.config.markerColor}).addTo(this.santaMap);
+            
         }
         this.arrivalSet.sort();
         // Log.info(this.arrivalSet);
@@ -204,23 +202,6 @@ Module.register("MMM-SantaTracker", {
         return wrapper;
     },
 
-
-    /**
-	 * Schedule popups & delay between popups.
-	 */
-	schedulePopInterval: function () {
-		this.updateDom(this.config.animationSpeed);
-        var markerArray = this.markersLayer.getLayers();
-
-		// Clear timers if they already exist
-		if (this.popTimer != null) clearInterval(this.popTimer);
-        if (this.resetTimer != null) clearInterval(this.resetTimer);
-
-        // implement popup with optional delay
-		this.timer = setInterval(() => {
-			this.randomPopup();
-		}, this.config.popInterval + this.config.popDelay);
-	},
 
     buildMap: function() {
         if (this.santaMap != null) {
