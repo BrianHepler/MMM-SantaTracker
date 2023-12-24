@@ -52,7 +52,6 @@ Module.register("MMM-SantaTracker", {
         const response = await this.loadDataFile();
         this.santaData = JSON.parse(response);
         if (response == null) Log.info("file failed to load.");
-        this.processSantaData();
     },
 
     getHeader: function() { return this.name;},
@@ -65,6 +64,29 @@ Module.register("MMM-SantaTracker", {
         }, this.config.updateInterval);
         // this.schedulePopInterval();
     },
+
+    /**
+     * The dates of the source file are from 2019. Convert those dates to current year, but same day,hour,minute.
+     * Everything should be in UTC.
+     * @param {*} epochDate 
+     * @returns Epoch date for the present year.
+     */
+    convertDateToThisYear: function(epochDate) {
+        let now = new Date();
+        var year = now.getUTCFullYear();
+
+        var sourceDate = new Date(epochDate);
+        var sMonth = sourceDate.getUTCMonth();
+        var sDay = sourceDate.getUTCDate();
+        var sHour = sourceDate.getUTCHours();
+        var sMin = sourceDate.getUTCMinutes();
+        var sSec = sourceDate.getUTCSeconds();
+
+        // Log.info("Updating date(" + epochDate + ") to " + year + " " + 12 + " " + sDay + " " + sHour + " " + sMin + " " + sSec);
+        var rDate = new Date(year, sMonth, sDay, sHour, sMin, sSec);
+        return rDate.valueOf();
+    },
+    
 
     getDom: function() {
         var wrapper;
@@ -166,7 +188,7 @@ Module.register("MMM-SantaTracker", {
      */
     processSantaData: function() {
         Log.info(this.name + " - Processing Santa locations");
-
+        
         var locations = this.santaData.destinations;
         var markerRadius = 3;
         var markers = this.markersLayer;
@@ -180,7 +202,7 @@ Module.register("MMM-SantaTracker", {
             var marker = L.circleMarker([entry.location.lat, entry.location.lng], {radius: markerRadius, color: this.config.markerColor}).addTo(this.santaMap)
             marker.bindPopup(popup);
             markers.addLayer(marker);
-            
+
             this.locationMap.set(arrive,entry);          
             this.popupMap.set(arrive, popup);
             this.markerMap.set(arrive, marker);
@@ -189,16 +211,7 @@ Module.register("MMM-SantaTracker", {
         // Log.info(this.arrivalSet);
     },
 
-    /**
-	 * Retrieve a file from the local filesystem
-	 * @returns {Promise} Resolved when the file is loaded
-	 */
-	loadDataFile: async function () {
-		const isRemote = this.config.dataFile.indexOf("http://") === 0 || this.config.dataFile.indexOf("https://") === 0,
-			url = isRemote ? this.config.dataFile : this.file(this.config.dataFile);
-		const response = await fetch(url);
-		return await response.text();
-	},
+
 
     createMarker: function(lat,lon) {
         var markerRadius = this.santaMap.getZoom() - 1;
@@ -257,6 +270,7 @@ Module.register("MMM-SantaTracker", {
 
 
     buildMap: function() {
+        Log.info("Building santa map.");
         if (this.santaMap != null) {
             Log.info("map already exists");
         } else {
@@ -289,10 +303,12 @@ Module.register("MMM-SantaTracker", {
         }
 
         if (this.markersLayer == null) { 
+            Log.info("creating marker layer");
             this.markersLayer = L.layerGroup().addTo(this.santaMap);
         } else { 
             this.markersLayer.addTo(this.santaMap);
         }
+        this.loadDataFile(this.config.dataFile, this.processSantaData);
     },
 
     getScripts: function() {
@@ -306,8 +322,11 @@ Module.register("MMM-SantaTracker", {
     notificationReceived: function(notification, payload, sender) {
         switch(notification) {
             case "DOM_OBJECTS_CREATED":
-                this.loaded = true;
                 this.buildMap();
+                setTimeout(() => {
+                    this.processSantaData();
+                }, 2000);
+                this.loaded = true;
                 break;
             case "CLOCK_MINUTE":
                 this.updateSanta();
@@ -316,26 +335,14 @@ Module.register("MMM-SantaTracker", {
     },
 
     /**
-     * The dates of the source file are from 2019. Convert those dates to current year, but same day,hour,minute.
-     * Everything should be in UTC.
-     * @param {*} epochDate 
-     * @returns Epoch date for the present year.
-     */
-    convertDateToThisYear: function(epochDate) {
-        let now = new Date();
-        var year = now.getUTCFullYear();
-
-        var sourceDate = new Date(epochDate);
-        var sMonth = sourceDate.getUTCMonth();
-        var sDay = sourceDate.getUTCDate();
-        var sHour = sourceDate.getUTCHours();
-        var sMin = sourceDate.getUTCMinutes();
-        var sSec = sourceDate.getUTCSeconds();
-
-        // Log.info("Updating date(" + epochDate + ") to " + year + " " + 12 + " " + sDay + " " + sHour + " " + sMin + " " + sSec);
-        var rDate = new Date(year, sMonth, sDay, sHour, sMin, sSec);
-        return rDate.valueOf();
-    },
-
+	 * Retrieve a file from the local filesystem
+	 * @returns {Promise} Resolved when the file is loaded
+	 */
+	loadDataFile: async function () {
+        const isRemote = this.config.dataFile.indexOf("http://") === 0 || this.config.dataFile.indexOf("https://") === 0,
+            url = isRemote ? this.config.dataFile : this.file(this.config.dataFile);
+        const response = await fetch(url);
+        return await response.text();
+	},
     
   })
