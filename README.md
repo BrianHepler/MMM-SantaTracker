@@ -1,5 +1,5 @@
 # MMM-SantaTracker
-Track Santa Claus as he delivers presents on Christmas Eve.
+This is a module for the [MagicMirror<sup>2</sup>](https://github.com/MichMich/MagicMirror) framework that will track Santa Claus as he delivers presents on Christmas Eve.
 
 ![MMM-SantaTracker interface](ScreenShot.PNG)
 
