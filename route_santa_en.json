@@ -9,8 +9,8 @@
             "city": "Santa's Village",
             "region": "North Pole",
             "location": {
-                "lat": 84.6,
-                "lng": 168
+                "lat": 74.907380,
+                "lng": 150.310166
             },
             "details": {
                 "timezone": 0,

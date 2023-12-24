@@ -3,11 +3,13 @@ Module.register("MMM-SantaTracker", {
         mapUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // where to pull map tiles
         dataFile: 'route_santa_en.json',
         mapMode: 'dark', // map tile appearance
-        lat: 69.64366, // latitude
-		lon: -93.07966, // longitude
-        zoomLevel: 4, // Zoom level of map
+        lat: 74.907380, // latitude
+		lon: 150.310166, // longitude
+        zoomLevel: 3, // Zoom level of map
         markerColor: 'LightGreen' ,
-        updateInterval: 1000 * 60 // check Santa's location every minute
+        lineColor: '#aa1100',
+        lineWidth: 5,
+        updateInterval: 1000 * 10 // check Santa's location every minute
     },
   
     start: async function () {
@@ -19,6 +21,7 @@ Module.register("MMM-SantaTracker", {
 
         // one map to rule them all
         this.mapWrapper = null;
+        this.santaPath = null;
 
         this.config.animationSpeed = 1000;
         this.markersLayer = new L.layerGroup();
@@ -37,6 +40,12 @@ Module.register("MMM-SantaTracker", {
             boxZoom: false,
             doubleClickZoom: false,
             attributionControl: false
+        };
+        this.lineOptions = {
+            weight: this.config.lineWidth,
+            color: this.config.lineColor,
+            fill: false,
+            interactive: false
         };
 
         // Load the data
@@ -88,17 +97,19 @@ Module.register("MMM-SantaTracker", {
     updateSanta: function() {
         Log.info("Checking on Santa's location...");
 
-        var overTime = new Date("24 December 2023 22:02:01");  // override date for testing
-        // Log.info ("Override date: " + overTime.valueOf());
+        var overTime = new Date("24 December 2023 10:26:01");  // override date for testing
         var now = new Date();
-        var markers = this.markersLayer;
-        var markerArray = markers.getLayers();
+        
         var pullIndex = 0;
 
         for (let index = 0; index < this.arrivalSet.length; index++) {
-            if (overTime.valueOf() > this.arrivalSet[index]) {
+            // Log.info("checking " + now.valueOf() + " vs " + this.arrivalSet[index]);
+            // if (now.valueOf > this.arrivalSet[index]) {
+            if (overTime.valueOf() > this.arrivalSet[index]) {   // Test conditional.
                 pullIndex = this.arrivalSet[index];
-            } else { break; }
+            } else { 
+                break;
+             }
         } // end loop
 
         var entry = this.locationMap.get(pullIndex);
@@ -108,13 +119,46 @@ Module.register("MMM-SantaTracker", {
             return;
         }
         Log.info("Pulled entry for " + entry.city + ", " + entry.region);
-        Log.info("Pulled popup: " + this.popupMap.get(pullIndex));
-        Log.info("pulled marker: " + this.markerMap.get(pullIndex));
+        // Log.info("Pulled popup: " + this.popupMap.get(pullIndex));
+        // Log.info("pulled marker: " + marker);
+        this.processSantaPath(entry.location.lat, entry.location.lng);
         if (marker != null) {
             marker.openPopup();
         }
-        var lat = entry.location.lat;
-        var lon = entry.location.lng;
+    },
+
+    /**
+     * Draw a line tracing Santa's path throughout the world.
+     * @param {*} newLat 
+     * @param {*} newLon 
+     */
+    processSantaPath: function(newLat, newLon) {
+        Log.info("Adding " + newLat +", " + newLon + " to the path.");
+        if (this.santaPath == null) {
+            Log.info("Creating Santa's path.");
+            var initPoints = [ [84.6, 168]];
+
+            for (let index = 0; index < this.arrivalSet.length; index++) {
+                var entry = this.locationMap.get(this.arrivalSet[index]);
+                Log.info("Adding previous points of " +entry.location.lat + ", " + entry.location.lng);
+                if (entry.location.lat == newLat && entry.location.lng == newLon) { break; } // done catching up
+                var newPoints = [entry.location.lat, entry.location.lng];
+                initPoints.push(newPoints);
+            }
+
+            var map = this.santaMap;
+            var polyline = L.polyline(initPoints, this.lineOptions).addTo(map);
+            this.santaPath = polyline;
+
+            // catch up if restart
+        }
+
+        var pointArray = this.santaPath.getLatLngs();
+        var newEndPoint = [newLat, newLon];
+        pointArray.push(newEndPoint);
+        this.santaPath.setLatLngs(pointArray);
+
+        return;
     },
 
     /**
