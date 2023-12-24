@@ -169,6 +169,8 @@ Module.register("MMM-SantaTracker", {
 
         var locations = this.santaData.destinations;
         var markerRadius = 3;
+        var markers = this.markersLayer;
+        markers.clearLayers();
 
         for (let index = 0; index < locations.length; index++) {
             var entry = locations[index];
@@ -177,6 +179,8 @@ Module.register("MMM-SantaTracker", {
             var popup = this.createPopup(entry);
             var marker = L.circleMarker([entry.location.lat, entry.location.lng], {radius: markerRadius, color: this.config.markerColor}).addTo(this.santaMap)
             marker.bindPopup(popup);
+            markers.addLayer(marker);
+            
             this.locationMap.set(arrive,entry);          
             this.popupMap.set(arrive, popup);
             this.markerMap.set(arrive, marker);
