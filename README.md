@@ -1,6 +1,8 @@
 # MMM-SantaTracker
 Track Santa Claus as he delivers presents on Christmas Eve.
 
+![MMM-SantaTracker interface](ScreenShot.PNG)
+
 ## Features
 * Tracks Santa Claus as he delivers presents!
 * Displays popup of his location with city & country 
