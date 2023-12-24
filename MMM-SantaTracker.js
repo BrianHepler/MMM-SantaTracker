@@ -9,7 +9,7 @@ Module.register("MMM-SantaTracker", {
         markerColor: 'LightGreen' ,
         lineColor: '#aa1100',
         lineWidth: 5,
-        updateInterval: 1000 * 10 // check Santa's location every minute
+        updateInterval: 1000 * 60 // check Santa's location every minute
     },
   
     start: async function () {
@@ -168,8 +168,7 @@ Module.register("MMM-SantaTracker", {
         Log.info(this.name + " - Processing Santa locations");
 
         var locations = this.santaData.destinations;
-        var markerRadius = this.santaMap.getZoom() - 1;
-        var markerLayer = this.markerLayer;
+        var markerRadius = 3;
 
         for (let index = 0; index < locations.length; index++) {
             var entry = locations[index];
