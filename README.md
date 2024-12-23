@@ -33,4 +33,5 @@ All configuration parameters are optional.
 | mapMode | "dark" | The map tile style. Accepted parameters are "dark", "light", "satellite"|
 | lineColor | "#a1100" | Color of the line that follows Santa |
 | lineWidth | 3 | Width of the line that follows Santa |
+| overTime | null | Overrides the module scheduling. You can test the tracker by specifying a valid date & time string on Christmas Eve here. Dates are in format `YYYY-MM-DDTHH:mm:ss.sssZ` with some wiggle room. |
 
