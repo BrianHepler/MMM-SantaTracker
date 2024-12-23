@@ -9,6 +9,7 @@ Module.register("MMM-SantaTracker", {
         markerColor: 'LightGreen' ,
         lineColor: '#aa1100',
         lineWidth: 5,
+        overTime: null,
         updateInterval: 1000 * 60 // check Santa's location every minute
     },
   
@@ -112,6 +113,11 @@ Module.register("MMM-SantaTracker", {
         return wrapper;
     },
 
+    getCountdown: function() {
+        let now = new Date();
+        var year = now.getUTCFullYear();
+    },
+
     /**
      * Updates the map with the latest position of Santa and creates the popup
      * that corresponds to the position.
@@ -119,25 +125,32 @@ Module.register("MMM-SantaTracker", {
     updateSanta: function() {
         Log.info("Checking on Santa's location...");
 
-        var overTime = new Date("24 December 2023 10:26:01");  // override date for testing
+        var overTime = this.config.overTime;
         var now = new Date();
+
+        if (overTime != null) {
+            Log.info("Overriding date: '" + this.config.overTime + "'");
+            try {
+                now = new Date(overTime);
+            } catch (error) {
+                Log.error("Configured date of '" + overTime + "' was invalid.");
+                now = new Date();
+            }
+        }
         
         var pullIndex = 0;
 
         for (let index = 0; index < this.arrivalSet.length; index++) {
             // Log.info("checking " + now.valueOf() + " vs " + this.arrivalSet[index]);
             if (now.valueOf() > this.arrivalSet[index]) {
-            // if (overTime.valueOf() > this.arrivalSet[index]) {   // Test conditional.
                 pullIndex = this.arrivalSet[index];
-            } else { 
-                break;
              }
         } // end loop
 
         var entry = this.locationMap.get(pullIndex);
         var marker = this.markerMap.get(pullIndex);
         if (entry == null || marker == null) {
-            Log.info("Could not locate entry for " + pullIndex);
+        //     // Log.info("Could not locate entry for " + pullIndex);
             return;
         }
         Log.info("Pulled entry for " + entry.city + ", " + entry.region);
@@ -252,6 +265,14 @@ Module.register("MMM-SantaTracker", {
         var imageUrl = null;
         var imageUrls = entry.details.photos;
         if (imageUrls.length > 0) { imageUrl = imageUrls[0].url; }
+
+        // Find the first image that returns data
+        for (let i=0; i<imageUrls.length; i++) {
+            if (this.getUrlStatus(imageUrls[i].url) != "404") {
+                imageUrl = imageUrls[i].url;
+                break;
+            }
+        }
         
         if (imageUrl != null) {
             var image = document.createElement("img");
@@ -267,6 +288,18 @@ Module.register("MMM-SantaTracker", {
         wrapper.appendChild(table);
 
         return wrapper;
+    },
+
+    getUrlStatus: function (url) {
+        var request = new XMLHttpRequest();
+        request.onreadystatechange = function() {
+            if (request.readyState === 4){
+                request.status;//this contains the status code
+                return request.status;
+            }
+        };
+        request.open("GET", url, true);
+        request.send(); 
     },
 
 
