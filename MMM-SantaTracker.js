@@ -4,34 +4,39 @@ Module.register("MMM-SantaTracker", {
         dataFile: 'route_santa_en.json',
         mapMode: 'dark', // map tile appearance
         lat: 74.907380, // latitude
-		lon: 150.310166, // longitude
+        lon: 150.310166, // longitude
         zoomLevel: 3, // Zoom level of map
-        markerColor: 'LightGreen' ,
+        markerColor: 'LightGreen',
         lineColor: '#aa1100',
         lineWidth: 5,
         overTime: null,
-        updateInterval: 1000 * 60 // check Santa's location every minute
+        updateInterval: 1000 * 60, // check Santa's location every minute
+        debug: false // Enable debug logging
     },
-  
-    start: async function () {
-        Log.info("Starting module " + this.name);
+
+    start: function () {
+        this.debugLog("Starting module " + this.name);
         this.loaded = false;
-        this.updateTimer = setInterval(()=> {
+        this.dataLoaded = false;
+
+        // Update timer
+        this.updateTimer = setInterval(() => {
             this.updateSanta();
         }, this.config.updateInterval);
 
-        // one map to rule them all
+        // Map elements
         this.mapWrapper = null;
         this.santaPath = null;
-
-        this.config.animationSpeed = 1000;
+        this.santaMap = null;
         this.markersLayer = new L.layerGroup();
-        this.popupIndex = -1;
+
+        // Data storage for frontend
         this.locationMap = new Map();
         this.markerMap = new Map();
-        this.popupMap = new Map();
-        this.arrivalSet = [];
+        this.currentLocation = null;
 
+        // Map options
+        this.config.animationSpeed = 1000;
         this.popupOptions = {
             closeButton: false,
             closeOnClick: true,
@@ -49,47 +54,31 @@ Module.register("MMM-SantaTracker", {
             interactive: false
         };
 
-        // Load the data
-        const response = await this.loadDataFile();
-        this.santaData = JSON.parse(response);
-        if (response == null) Log.info("file failed to load.");
+        // Request data from node_helper
+        this.debugLog("Requesting Santa data from node_helper");
+        this.sendSocketNotification("LOAD_SANTA_DATA", {
+            dataFile: this.config.dataFile,
+            config: this.config  // Pass entire config to node_helper
+        });
     },
 
-    getHeader: function() { return this.name;},
+    debugLog: function (message) {
+        if (this.config.debug) {
+            Log.info(this.name + ": " + message);
+        }
+    },
 
-    suspend: function() { clearInterval(this.updateTimer); clearInterval(this.updateTimer); clearInterval(this.resetTimer)},
+    getHeader: function () { return this.name; },
 
-    resume: function() { 
-        this.updateTimer = setInterval(()=> {
-            this.updateData();
+    suspend: function () { clearInterval(this.updateTimer); clearInterval(this.updateTimer); clearInterval(this.resetTimer) },
+
+    resume: function () {
+        this.updateTimer = setInterval(() => {
+            this.updateSanta();
         }, this.config.updateInterval);
-        // this.schedulePopInterval();
     },
 
-    /**
-     * The dates of the source file are from 2019. Convert those dates to current year, but same day,hour,minute.
-     * Everything should be in UTC.
-     * @param {*} epochDate 
-     * @returns Epoch date for the present year.
-     */
-    convertDateToThisYear: function(epochDate) {
-        let now = new Date();
-        var year = now.getUTCFullYear();
-
-        var sourceDate = new Date(epochDate);
-        var sMonth = sourceDate.getUTCMonth();
-        var sDay = sourceDate.getUTCDate();
-        var sHour = sourceDate.getUTCHours();
-        var sMin = sourceDate.getUTCMinutes();
-        var sSec = sourceDate.getUTCSeconds();
-
-        // Log.info("Updating date(" + epochDate + ") to " + year + " " + 12 + " " + sDay + " " + sHour + " " + sMin + " " + sSec);
-        var rDate = new Date(year, sMonth, sDay, sHour, sMin, sSec);
-        return rDate.valueOf();
-    },
-    
-
-    getDom: function() {
+    getDom: function () {
         var wrapper;
         if (this.mapWrapper != null) {
             wrapper = this.mapWrapper;
@@ -101,66 +90,68 @@ Module.register("MMM-SantaTracker", {
             wrapper.height = this.config.height;
             this.mapWrapper = wrapper;
         }
-        
+
         if (!this.loaded) {
             wrapper.innerHTML = this.translate('LOADING');
             wrapper.innerClassName = 'dimmed light small';
             return wrapper;
-        } else { 
+        } else {
             // this.buildMap();
         }
-        
+
         return wrapper;
     },
 
-    getCountdown: function() {
+    getCountdown: function () {
         let now = new Date();
         var year = now.getUTCFullYear();
     },
 
     /**
-     * Updates the map with the latest position of Santa and creates the popup
-     * that corresponds to the position.
+     * Updates the map with the latest position of Santa
+     * Requests current location from node_helper
      */
-    updateSanta: function() {
-        Log.info("Checking on Santa's location...");
-
-        var overTime = this.config.overTime;
-        var now = new Date();
-
-        if (overTime != null) {
-            Log.info("Overriding date: '" + this.config.overTime + "'");
-            try {
-                now = new Date(overTime);
-            } catch (error) {
-                Log.error("Configured date of '" + overTime + "' was invalid.");
-                now = new Date();
-            }
-        }
-        
-        var pullIndex = 0;
-
-        for (let index = 0; index < this.arrivalSet.length; index++) {
-            // Log.info("checking " + now.valueOf() + " vs " + this.arrivalSet[index]);
-            if (now.valueOf() > this.arrivalSet[index]) {
-                pullIndex = this.arrivalSet[index];
-             }
-        } // end loop
-
-        var entry = this.locationMap.get(pullIndex);
-        var marker = this.markerMap.get(pullIndex);
-        if (entry == null || marker == null) {
-        //     // Log.info("Could not locate entry for " + pullIndex);
+    updateSanta: function () {
+        if (!this.dataLoaded) {
+            this.debugLog("Data not yet loaded, skipping update");
             return;
         }
-        Log.info("Pulled entry for " + entry.city + ", " + entry.region);
-        // Log.info("Pulled popup: " + this.popupMap.get(pullIndex));
-        // Log.info("pulled marker: " + marker);
+
+        this.debugLog("Requesting Santa's location from node_helper...");
+
+        var now = new Date();
+
+        // Request Santa's location from node_helper (backend does the heavy lifting)
+        this.sendSocketNotification("GET_SANTA_LOCATION", {
+            currentTime: now.valueOf()
+        });
+    },
+
+    /**
+     * Handle Santa location update from node_helper
+     */
+    handleSantaLocationUpdate: function (data) {
+        if (!data || !data.location) {
+            this.debugLog("No location data received");
+            return;
+        }
+
+        var entry = data.location;
+        var timestamp = data.timestamp;
+
+        this.debugLog("Santa is at: " + entry.city + ", " + entry.region);
+
+        // Update the map view
+        var marker = this.markerMap.get(timestamp);
+
         this.processSantaPath(entry.location.lat, entry.location.lng);
-        if (marker != null) {
+
+        if (marker != null && this.santaMap) {
             marker.openPopup();
             this.santaMap.setView([entry.location.lat, entry.location.lng]);
         }
+
+        this.currentLocation = data;
     },
 
     /**
@@ -168,16 +159,26 @@ Module.register("MMM-SantaTracker", {
      * @param {*} newLat 
      * @param {*} newLon 
      */
-    processSantaPath: function(newLat, newLon) {
-        Log.info("Adding " + newLat +", " + newLon + " to the path.");
-        if (this.santaPath == null) {
-            Log.info("Creating Santa's path.");
-            var initPoints = [ [84.6, 168]];
+    processSantaPath: function (newLat, newLon) {
+        this.debugLog("Adding " + newLat + ", " + newLon + " to the path.");
 
-            for (let index = 0; index < this.arrivalSet.length; index++) {
-                var entry = this.locationMap.get(this.arrivalSet[index]);
-                // Log.info("Adding previous points of " +entry.location.lat + ", " + entry.location.lng);
-                if (entry.location.lat == newLat && entry.location.lng == newLon) { break; } // done catching up
+        if (this.santaPath == null) {
+            this.debugLog("Creating Santa's path.");
+            var initPoints = [[84.6, 168]]; // North Pole starting point
+
+            // Add all visited locations to the path
+            // locationMap keys are timestamps, iterate through them
+            const sortedTimestamps = Array.from(this.locationMap.keys()).sort((a, b) => a - b);
+
+            for (let timestamp of sortedTimestamps) {
+                var entry = this.locationMap.get(timestamp);
+                if (!entry || !entry.location) continue;
+
+                // Stop when we reach the current location
+                if (entry.location.lat == newLat && entry.location.lng == newLon) {
+                    break;
+                }
+
                 var newPoints = [entry.location.lat, entry.location.lng];
                 initPoints.push(newPoints);
             }
@@ -185,10 +186,9 @@ Module.register("MMM-SantaTracker", {
             var map = this.santaMap;
             var polyline = L.polyline(initPoints, this.lineOptions).addTo(map);
             this.santaPath = polyline;
-
-            // catch up if restart
         }
 
+        // Add the new endpoint to the path
         var pointArray = this.santaPath.getLatLngs();
         var newEndPoint = [newLat, newLon];
         pointArray.push(newEndPoint);
@@ -198,38 +198,43 @@ Module.register("MMM-SantaTracker", {
     },
 
     /**
-     * Load the locations & times from file. Populate the map with the locations.
+     * Populate the map with location markers
+     * Data comes from node_helper
      */
-    processSantaData: function() {
-        Log.info(this.name + " - Processing Santa locations");
-        
-        var locations = this.santaData.destinations;
+    processSantaData: function (locations) {
+        this.debugLog("Processing " + locations.length + " Santa locations");
+
         var markerRadius = 3;
         var markers = this.markersLayer;
         markers.clearLayers();
 
         for (let index = 0; index < locations.length; index++) {
             var entry = locations[index];
-            var arrive = this.convertDateToThisYear(entry.arrival);
-            this.arrivalSet.push(arrive);
+            var arrive = entry.arrival; // Already converted by node_helper
+
             var popup = this.createPopup(entry);
-            var marker = L.circleMarker([entry.location.lat, entry.location.lng], {radius: markerRadius, color: this.config.markerColor}).addTo(this.santaMap)
+            var marker = L.circleMarker([entry.location.lat, entry.location.lng], {
+                radius: markerRadius,
+                color: this.config.markerColor
+            }).addTo(this.santaMap);
+
             marker.bindPopup(popup);
             markers.addLayer(marker);
 
-            this.locationMap.set(arrive,entry);          
-            this.popupMap.set(arrive, popup);
+            this.locationMap.set(arrive, entry);
             this.markerMap.set(arrive, marker);
         }
-        this.arrivalSet.sort();
-        // Log.info(this.arrivalSet);
+
+        this.debugLog("Markers created for " + this.markerMap.size + " locations");
+        this.dataLoaded = true;
+        this.loaded = true;
     },
 
 
 
-    createMarker: function(lat,lon) {
+    createMarker: function (lat, lon) {
         var markerRadius = this.santaMap.getZoom() - 1;
-        var circle = L.circleMarker([lat,lon], {
+        var circle = L.circleMarker([lat, lon], {
             stroke: false,
             fill: true,
             fillColor: this.config.markerColor,
@@ -238,19 +243,19 @@ Module.register("MMM-SantaTracker", {
         });
         return circle;
     },
-    
+
     /**
      * Creates the popup for Santa's position. Two row table. Name of city, region
      * followed by image of that location taken from route_santa.json.
      * @param {*} entry JSON object containing single entry of city, region, location, etc.
      * @returns DIV element containing table.
      */
-    createPopup: function(entry) {
+    createPopup: function (entry) {
         var wrapper = document.createElement("div");
         wrapper.className = "popup";
         wrapper.id = "SantaTracker-popup-" + entry.city;
 
-        var table = document.createElement("table");       
+        var table = document.createElement("table");
         const rowI = document.createElement("tr");
         const rowL = document.createElement("tr");
 
@@ -258,30 +263,33 @@ Module.register("MMM-SantaTracker", {
         tdL.className = "popup-label";
         tdL.append(entry.city + ", " + entry.region);
         rowL.appendChild(tdL);
-        
+
         var tdI = document.createElement("td");
         tdI.className = "popup-imageCell"
 
         var imageUrl = null;
         var imageUrls = entry.details.photos;
-        if (imageUrls.length > 0) { imageUrl = imageUrls[0].url; }
 
-        // Find the first image that returns data
-        for (let i=0; i<imageUrls.length; i++) {
-            if (this.getUrlStatus(imageUrls[i].url) != "404") {
-                imageUrl = imageUrls[i].url;
-                break;
-            }
+        // Simply use the first available image URL
+        if (imageUrls && imageUrls.length > 0) {
+            imageUrl = imageUrls[0].url;
         }
-        
+
         if (imageUrl != null) {
             var image = document.createElement("img");
             image.className = "popup-image";
-            image.setAttribute("decoding", "sync");
+            image.setAttribute("decoding", "async");
             image.src = imageUrl;
+
+            // Handle image load errors gracefully
+            image.onerror = function () {
+                Log.warn("Failed to load image: " + imageUrl);
+                image.style.display = "none";
+            };
+
             tdI.append(image);
-            // Log.info("Set URL to " + imageUrl);
         }
+
         rowI.appendChild(tdI);
         table.appendChild(rowL);
         table.appendChild(rowI);
@@ -290,23 +298,10 @@ Module.register("MMM-SantaTracker", {
         return wrapper;
     },
 
-    getUrlStatus: function (url) {
-        var request = new XMLHttpRequest();
-        request.onreadystatechange = function() {
-            if (request.readyState === 4){
-                request.status;//this contains the status code
-                return request.status;
-            }
-        };
-        request.open("GET", url, true);
-        request.send(); 
-    },
-
-
-    buildMap: function() {
-        Log.info("Building santa map.");
+    buildMap: function () {
+        this.debugLog("Building santa map.");
         if (this.santaMap != null) {
-            Log.info("map already exists");
+            this.debugLog("map already exists");
         } else {
             var map = L.map('SantaTracker-map', {
                 center: [this.config.lat, this.config.lon],
@@ -317,63 +312,90 @@ Module.register("MMM-SantaTracker", {
                 attributionControl: false
             });
 
-            // Log.info("mapMode: " + this.config.mapMode);
             switch (this.config.mapMode) {
-                case 'light': 
-                    L.tileLayer.provider('CartoDB.Positron',{maxZoom: 19}).addTo(map);
+                case 'light':
+                    L.tileLayer.provider('CartoDB.Positron', { maxZoom: 19 }).addTo(map);
                     break;
                 case 'dark':
-                    L.tileLayer.provider('CartoDB.DarkMatter',{maxZoom:19}).addTo(map);
+                    L.tileLayer.provider('CartoDB.DarkMatter', { maxZoom: 19 }).addTo(map);
                     break;
                 case 'satellite':
-                    L.tileLayer.provider('USGS.USImageryTopo',{maxZoom: 19}).addTo(map);
+                    L.tileLayer.provider('USGS.USImageryTopo', { maxZoom: 19 }).addTo(map);
                     break;
                 default:
-                    L.tileLayer.provider('CartoDB.DarkMatter',{maxZoom:19}).addTo(map);
+                    L.tileLayer.provider('CartoDB.DarkMatter', { maxZoom: 19 }).addTo(map);
             } // end switch statement
 
             L.control.attribution(this.attributionOptions);
             this.santaMap = map;
         }
 
-        if (this.markersLayer == null) { 
-            Log.info("creating marker layer");
+        if (this.markersLayer == null) {
+            this.debugLog("creating marker layer");
             this.markersLayer = L.layerGroup().addTo(this.santaMap);
-        } else { 
+        } else {
             this.markersLayer.addTo(this.santaMap);
         }
-        this.loadDataFile(this.config.dataFile, this.processSantaData);
+
+        // Request location data from node_helper
+        this.sendSocketNotification("GET_ALL_LOCATIONS", {});
     },
 
-    getScripts: function() {
-        return [this.file('leaflet/leaflet-src.js'),this.file('leaflet/leaflet-providers.js')];
+    getScripts: function () {
+        return [
+            this.file('leaflet/leaflet-src.js'),
+            this.file('leaflet/leaflet-providers.js')
+        ];
     },
-    
-    getStyles: function() {
-        return [this.file('leaflet/leaflet.css'),this.file('MMM-SantaTracker.css')];
+
+    getStyles: function () {
+        return [this.file('leaflet/leaflet.css'), this.file('MMM-SantaTracker.css')];
     },
-    
-    notificationReceived: function(notification, payload, sender) {
-        switch(notification) {
+
+    notificationReceived: function (notification, payload, sender) {
+        switch (notification) {
             case "DOM_OBJECTS_CREATED":
                 this.buildMap();
-                setTimeout(() => {
-                    this.processSantaData();
-                }, 2000);
-                this.loaded = true;
                 break;
         }
     },
 
     /**
-	 * Retrieve a file from the local filesystem
-	 * @returns {Promise} Resolved when the file is loaded
-	 */
-	loadDataFile: async function () {
-        const isRemote = this.config.dataFile.indexOf("http://") === 0 || this.config.dataFile.indexOf("https://") === 0,
-            url = isRemote ? this.config.dataFile : this.file(this.config.dataFile);
-        const response = await fetch(url);
-        return await response.text();
-	},
-    
-  })
+     * Handle socket notifications from node_helper
+     */
+    socketNotificationReceived: function (notification, payload) {
+        this.debugLog("Received socket notification: " + notification);
+
+        switch (notification) {
+            case "SANTA_DATA_LOADED":
+                if (payload.success) {
+                    this.debugLog("Santa data loaded successfully: " + payload.locationCount + " locations");
+                } else {
+                    Log.error("Failed to load Santa data: " + payload.error);
+                }
+                break;
+
+            case "ALL_LOCATIONS":
+                this.debugLog("Received all locations from node_helper");
+                if (this.santaMap) {
+                    this.processSantaData(payload);
+                    // Start updating Santa's position
+                    this.updateSanta();
+                }
+                break;
+
+            case "SANTA_LOCATION_UPDATE":
+                this.handleSantaLocationUpdate(payload);
+                break;
+
+            case "VISITED_LOCATIONS":
+                this.debugLog("Received " + payload.length + " visited locations");
+                // Handle visited locations if needed
+                break;
+
+            default:
+                this.debugLog("Unknown socket notification: " + notification);
+        }
+    }
+
+});
