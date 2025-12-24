@@ -62,7 +62,19 @@ module.exports = NodeHelper.create({
 
         for (let i = 0; i < locations.length; i++) {
             const entry = locations[i];
+
+            // Basic validation: entry and location must exist and have lat/lng
+            if (!entry || typeof entry.arrival === 'undefined' || !entry.location || typeof entry.location.lat !== 'number' || typeof entry.location.lng !== 'number') {
+                this.debugLog(`Skipping invalid or incomplete entry at index ${i}`);
+                continue;
+            }
+
             const arrive = this.convertDateToThisYear(entry.arrival);
+            if (arrive === null || !Number.isFinite(arrive)) {
+                this.debugLog(`Skipping entry with invalid converted arrival at index ${i}`);
+                continue;
+            }
+
             this.arrivalSet.push(arrive);
             this.locationMap.set(arrive, entry);
         }
@@ -76,18 +88,17 @@ module.exports = NodeHelper.create({
      * Convert dates from source file to current year
      */
     convertDateToThisYear: function (epochDate) {
-        const now = new Date();
-        const year = now.getUTCFullYear();
+        // Validate input
+        if (!Number.isFinite(epochDate)) {
+            this.debugLog("Invalid epochDate passed to convertDateToThisYear: " + epochDate);
+            return null;
+        }
 
-        const sourceDate = new Date(epochDate);
-        const sMonth = sourceDate.getUTCMonth();
-        const sDay = sourceDate.getUTCDate();
-        const sHour = sourceDate.getUTCHours();
-        const sMin = sourceDate.getUTCMinutes();
-        const sSec = sourceDate.getUTCSeconds();
-
-        const rDate = new Date(year, sMonth, sDay, sHour, sMin, sSec);
-        return rDate.valueOf();
+        // Use UTC construction to avoid mixing UTC getters with local Date constructor
+        const year = new Date().getUTCFullYear();
+        const sd = new Date(epochDate);
+        const utcMillis = Date.UTC(year, sd.getUTCMonth(), sd.getUTCDate(), sd.getUTCHours(), sd.getUTCMinutes(), sd.getUTCSeconds());
+        return utcMillis;
     },
 
     /**
@@ -159,17 +170,32 @@ module.exports = NodeHelper.create({
             return [];
         }
 
-        return this.santaData.destinations.map(entry => ({
-            id: entry.id,
-            city: entry.city,
-            region: entry.region,
-            location: entry.location,
-            arrival: this.convertDateToThisYear(entry.arrival),
-            departure: this.convertDateToThisYear(entry.departure),
-            population: entry.population,
-            presentsDelivered: entry.presentsDelivered,
-            details: entry.details
-        }));
+        // Filter out invalid entries so frontend doesn't need to guard for them
+        const results = [];
+        for (let i = 0; i < this.santaData.destinations.length; i++) {
+            const entry = this.santaData.destinations[i];
+            const arrival = this.convertDateToThisYear(entry.arrival);
+            const departure = this.convertDateToThisYear(entry.departure);
+
+            if (!entry || !entry.location || typeof entry.location.lat !== 'number' || typeof entry.location.lng !== 'number' || arrival === null) {
+                this.debugLog(`Skipping invalid entry for ALL_LOCATIONS at index ${i}`);
+                continue;
+            }
+
+            results.push({
+                id: entry.id,
+                city: entry.city,
+                region: entry.region,
+                location: entry.location,
+                arrival: arrival,
+                departure: departure,
+                population: entry.population,
+                presentsDelivered: entry.presentsDelivered,
+                details: entry.details
+            });
+        }
+
+        return results;
     },
 
     /**
